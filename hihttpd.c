@@ -4,6 +4,8 @@
 #include <sys/stat.h>
 #include "mongoose.h"
 
+//#define PERMISSION_BY_FILENAME
+
 // Return: 1 if regular file, 2 if directory, 0 if not found
 static int exists(const char *path) {
   struct stat st;
@@ -16,13 +18,58 @@ static int is_local_file(const char *uri, char *path, size_t path_len) {
   return exists(path);
 }
 
-static int has_wr_permission(struct mg_connection *conn, char * wr) {
-  char path[550], apikey[33];
+#if defined(PERMISSION_BY_FILENAME)
+/**
+ * Check for permission base on filenames
+ * 
+ * filename.html.tpyepermission.apikkey
+ * filename.html.tpyepermission.all
+ * eg.
+ * test.html.r.098f6bcd4621d373cade4e832627b4f6
+ * test.html.w.098f6bcd4621d373cade4e832627b4f6
+ * test.html.x.098f6bcd4621d373cade4e832627b4f6
+ * 
+ * tpyepermission: xrw
+ * 
+ * @param conn
+ * @param rwx
+ * @param key
+ * @return 0 or 1
+ */
+static int _has_rwx_permission(struct mg_connection *conn, char rwx, char * key) {
+  char path[550];
+  snprintf(path, sizeof(path) - strlen(path) - 1, "data%s.%s.%s", conn->uri, rwx, key);
+  printf("Test [%c] Permission [%s] for [%s]: %d\n", rwx, path, key);
+  return exists(path);  
+}
+#else
+static int _has_rwx_permission(struct mg_connection *conn, char rwx, char * key) {
+  char path[550], keycmp[100];
+  char * line = NULL;
+  size_t len = 0;
+  int permission = 0;
+  FILE *fp = NULL;
+    
+  snprintf(path, sizeof(path) - strlen(path) - 1, "data%s.permission", conn->uri);
+  if ((fp = fopen(path, "r")) != NULL) {
+    while (getline(&line, &len, fp) != -1) {
+      line[strlen(line)-1] = '\0'; // remove \n
+      memcpy(keycmp, &line[4], 100);
+      //printf("campare %s to %s %d\n", keycmp, key, !strcmp(keycmp, key));
+      permission = strcmp(keycmp, key) == 0 && (line[0] == rwx || line[1] == rwx || line[2] == rwx);
+    }
+    fclose(fp);
+  }
+  printf("Test [%c] Permission [%s] for [%s]: %d\n", rwx, path, key, permission);
+  return permission;  
+}
+#endif
+
+static int has_rwx_permission(struct mg_connection *conn, char rwx) {
+  char apikey[33];
   mg_get_var(conn, "apikey", apikey, sizeof(apikey));
   printf("apikey %s\n", apikey);
-  snprintf(path, sizeof(path) - strlen(path) - 1, "data%s.%s.%s", conn->uri, wr, apikey);
-  printf("Test Permission: [%s]\n", path);
-  return exists(path);
+  return _has_rwx_permission(conn, rwx, "all") || _has_rwx_permission(conn, rwx, apikey);
 }
 
 static int try_to_serve_locally(struct mg_connection *conn) {
@@ -30,7 +77,7 @@ static int try_to_serve_locally(struct mg_connection *conn) {
   int n;
   FILE *fp = NULL;
 
-  if (is_local_file(conn->uri, path, sizeof(path)) && has_wr_permission(conn, "read")) {
+  if (is_local_file(conn->uri, path, sizeof(path)) && has_rwx_permission(conn, 'r')) {
     if ((fp = fopen(path, "rb")) != NULL) {
       printf("Serving [%s] locally \n", path);
       mg_send_header(conn, "Connection", "close");
@@ -49,7 +96,7 @@ static int try_to_write_locally(struct mg_connection *conn, char *write) {
   char path[500];
   FILE *fp = NULL;
 
-  if (is_local_file(conn->uri, path, sizeof(path)) && has_wr_permission(conn, "write")) {
+  if (is_local_file(conn->uri, path, sizeof(path)) && has_rwx_permission(conn, 'w')) {
     if ((fp = fopen(path, "w")) != NULL) {
       fprintf(fp, "%s", write);
       fclose(fp);
