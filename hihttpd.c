@@ -56,8 +56,8 @@ static int _has_rwx_permission(struct mg_connection *conn, char rwx, char * key)
       line[strlen(line)-1] = '\0'; // remove \n
       memcpy(keycmp, &line[4], 100);
       if (strcmp(keycmp, key) == 0) {
-        //printf("campare %s to %s %d\n", keycmp, key, !strcmp(keycmp, key));
         permission = line[0] == rwx || line[1] == rwx || line[2] == rwx;
+        //printf("campare %s to %s %d\n", keycmp, key, permission);
         break;
       }
     }
@@ -114,23 +114,48 @@ static int try_to_write_locally(struct mg_connection *conn, char *write) {
 }
 
 static int try_to_exec_locally(struct mg_connection *conn, char *exec) {
-  mg_printf_data(conn, "to implement");
-  return MG_TRUE;
+  char path[500], buf[2000];
+  char * cmd;
+  int n, cmd_size;
+  FILE *fp = NULL;
+
+  if (is_local_file(conn->uri, path, sizeof(path)) && has_rwx_permission(conn, 'x')) {
+    cmd_size = strlen(path)+1+strlen(exec)+1;
+    cmd = malloc(cmd_size);
+    snprintf(cmd, cmd_size, "%s %s", path, exec);
+    printf("Try to run [%s] locally \n", cmd);
+    if ((fp = popen(path, "r")) != NULL) {
+      printf("Exec [%s] locally \n", path);
+      mg_send_header(conn, "Connection", "close");
+      mg_send_header(conn, "Content-Type", mg_get_mime_type(path, "text/plain"));
+      while ((n = fread(buf, 1, sizeof(buf), fp)) > 0) {
+        mg_send_data(conn, buf, n);
+      }
+      mg_send_data(conn, "", 0);
+      pclose(fp);
+    }
+  }
+  return fp == NULL ? MG_FALSE : MG_TRUE;
 }
 
 static int ev_handler(struct mg_connection *conn, enum mg_event ev) {
   char *action;
+  int action_size;
   switch (ev) {
     case MG_AUTH: return MG_TRUE;
     case MG_REQUEST:
-      action = malloc(sizeof(conn->query_string)); 
-      if (mg_get_var(conn, "exec", action, sizeof(action)) > -1) {
+      action_size = strlen(conn->query_string)+1;
+      action = malloc(action_size); 
+      if (mg_get_var(conn, "exec", action, action_size) > -1) {
+        printf("Exec...\n");
         return try_to_exec_locally(conn, action);
       }
-      else if (mg_get_var(conn, "write", action, sizeof(action)) > 0) {
+      else if (mg_get_var(conn, "write", action, action_size) > 0) {
+        printf("Write...\n");
         return try_to_write_locally(conn, action);
       }
       else {
+        printf("Read...\n");
         return try_to_serve_locally(conn);
       }
     default: return MG_FALSE;

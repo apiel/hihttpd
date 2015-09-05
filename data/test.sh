@@ -1,2 +1,3 @@
 #!/bin/bash
-gedit
+#gedit
+echo "helo"
