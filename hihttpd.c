@@ -4,6 +4,7 @@
 #include <sys/stat.h>
 #include "mongoose.h"
 
+#define NS_ENABLE_SSL
 //#define PERMISSION_BY_FILENAME
 
 // Return: 1 if regular file, 2 if directory, 0 if not found
@@ -183,7 +184,8 @@ static int ev_handler(struct mg_connection *conn, enum mg_event ev) {
 
 int main(int argc, char *argv[]) {
   struct mg_server *server;
-  char port[10] = "8080";
+  char port[10] = "8000";
+  const char * _port;
   
   if (argc > 1) {
     strcpy(port, argv[1]);
@@ -191,12 +193,17 @@ int main(int argc, char *argv[]) {
 
   // Create and configure the server
   server = mg_create_server(NULL, ev_handler);
+  
   mg_set_option(server, "listening_port", port);
-
-  // Serve request. Hit Ctrl-C to terminate the program
-  printf("Starting on port %s\n", mg_get_option(server, "listening_port"));
-  for (;;) {
-    mg_poll_server(server, 1000);
+  _port = mg_get_option(server, "listening_port");
+  if (strlen(_port)) {
+    printf("Starting on port %s\n", _port);
+    for (;;) {
+      mg_poll_server(server, 1000);
+    }
+  }
+  else {
+    printf("Cannot start on port %s\n", port);
   }
 
   // Cleanup, and free server instance
