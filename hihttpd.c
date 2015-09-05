@@ -55,8 +55,11 @@ static int _has_rwx_permission(struct mg_connection *conn, char rwx, char * key)
     while (getline(&line, &len, fp) != -1) {
       line[strlen(line)-1] = '\0'; // remove \n
       memcpy(keycmp, &line[4], 100);
-      //printf("campare %s to %s %d\n", keycmp, key, !strcmp(keycmp, key));
-      permission = strcmp(keycmp, key) == 0 && (line[0] == rwx || line[1] == rwx || line[2] == rwx);
+      if (strcmp(keycmp, key) == 0) {
+        //printf("campare %s to %s %d\n", keycmp, key, !strcmp(keycmp, key));
+        permission = line[0] == rwx || line[1] == rwx || line[2] == rwx;
+        break;
+      }
     }
     fclose(fp);
   }
@@ -69,7 +72,8 @@ static int has_rwx_permission(struct mg_connection *conn, char rwx) {
   char apikey[33];
   mg_get_var(conn, "apikey", apikey, sizeof(apikey));
   printf("apikey %s\n", apikey);
-  return _has_rwx_permission(conn, rwx, "all") || _has_rwx_permission(conn, rwx, apikey);
+  return _has_rwx_permission(conn, rwx, "all") 
+          || (apikey[0] != '\0' && _has_rwx_permission(conn, rwx, apikey));
 }
 
 static int try_to_serve_locally(struct mg_connection *conn) {
@@ -109,15 +113,22 @@ static int try_to_write_locally(struct mg_connection *conn, char *write) {
   return fp == NULL ? MG_FALSE : MG_TRUE;
 }
 
+static int try_to_exec_locally(struct mg_connection *conn, char *exec) {
+  mg_printf_data(conn, "to implement");
+  return MG_TRUE;
+}
+
 static int ev_handler(struct mg_connection *conn, enum mg_event ev) {
-  char *write;
+  char *action;
   switch (ev) {
     case MG_AUTH: return MG_TRUE;
     case MG_REQUEST:
-      write = malloc(sizeof(conn->query_string)); 
-      mg_get_var(conn, "write", write, sizeof(write));
-      if (write[0]) {
-        return try_to_write_locally(conn, write);
+      action = malloc(sizeof(conn->query_string)); 
+      if (mg_get_var(conn, "exec", action, sizeof(action)) > -1) {
+        return try_to_exec_locally(conn, action);
+      }
+      else if (mg_get_var(conn, "write", action, sizeof(action)) > 0) {
+        return try_to_write_locally(conn, action);
       }
       else {
         return try_to_serve_locally(conn);
