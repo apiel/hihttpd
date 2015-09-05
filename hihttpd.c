@@ -43,6 +43,18 @@ static int _has_rwx_permission(struct mg_connection *conn, char rwx, char * key)
   return exists(path);  
 }
 #else
+/**
+ * Check permission with filename.permission
+ * 
+--- all
+--x apikey
+--x 098f6bcd4621d373cade4e832627b4f6
+ * 
+ * @param conn
+ * @param rwx
+ * @param key
+ * @return 0 or 1
+ */
 static int _has_rwx_permission(struct mg_connection *conn, char rwx, char * key) {
   char path[550], keycmp[100];
   char * line = NULL;
@@ -162,12 +174,17 @@ static int ev_handler(struct mg_connection *conn, enum mg_event ev) {
   }
 }
 
-int main(void) {
+int main(int argc, char *argv[]) {
   struct mg_server *server;
+  char port[10] = "8080";
+  
+  if (argc > 1) {
+    strcpy(port, argv[1]);
+  }
 
   // Create and configure the server
   server = mg_create_server(NULL, ev_handler);
-  mg_set_option(server, "listening_port", "8080");
+  mg_set_option(server, "listening_port", port);
 
   // Serve request. Hit Ctrl-C to terminate the program
   printf("Starting on port %s\n", mg_get_option(server, "listening_port"));
