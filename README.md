@@ -34,6 +34,22 @@ Permission example for executable file only by apikey 098f6bcd4621d373cade4e8326
 
 SSL:
 
+For SSL you can use Stunnel
+
+https://www.digitalocean.com/community/tutorials/how-to-set-up-an-ssl-tunnel-using-stunnel-on-ubuntu
+
+or I am trying to use the mongoose SSL but didn't succeed
+
+https://github.com/cesanta/mongoose/blob/master/docs/SSL.md
+
+Run hihttpd like this:
+
+```
+sudo ./hihttpd 80,ssl://443:ssl.pem
+```
+
+Generate ssl.pem:
+
 ```
 openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem -days 1000 -nodes
 cat key.pem > ssl.pem; cat cert.pem >> ssl.pem

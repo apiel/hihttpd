@@ -193,7 +193,7 @@ int main(int argc, char *argv[]) {
 
   // Create and configure the server
   server = mg_create_server(NULL, ev_handler);
-  
+    
   mg_set_option(server, "listening_port", port);
   _port = mg_get_option(server, "listening_port");
   if (strlen(_port)) {
